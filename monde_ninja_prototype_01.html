@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Monde Ninja — Prototype 0.1</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:system-ui,-apple-system,sans-serif;touch-action:none}
+#renderCanvas{width:100%;height:100%;display:block;touch-action:none}
+#hud{position:fixed;inset:0;pointer-events:none;color:white;text-shadow:0 2px 4px #000}
+#title{position:absolute;top:env(safe-area-inset-top,10px);left:12px;background:#101923bb;padding:8px 12px;border:1px solid #ffffff33;border-radius:12px;font-size:13px}
+#bars{position:absolute;top:58px;left:12px;width:150px}
+.bar{height:10px;background:#20252b;border:1px solid #ffffff77;border-radius:8px;margin:6px 0;overflow:hidden}
+.fill{height:100%;width:100%;transition:width .12s}
+#health{background:#d84b4b}#chakra{background:#35a9ec}
+#hint{position:absolute;top:12px;right:12px;background:#101923bb;padding:7px 10px;border-radius:10px;font-size:11px;max-width:140px;text-align:right}
+#joystick{position:absolute;left:24px;bottom:calc(24px + env(safe-area-inset-bottom));width:116px;height:116px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff66;pointer-events:auto;touch-action:none}
+#stick{position:absolute;width:48px;height:48px;left:32px;top:32px;border-radius:50%;background:#e8eef5bb;border:2px solid white;box-shadow:0 2px 8px #0008}
+#buttons{position:absolute;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(2,68px);gap:10px;pointer-events:auto}
+button{border:1px solid #ffffff99;border-radius:50%;width:68px;height:68px;background:#172331cc;color:white;font-weight:700;font-size:11px;touch-action:none;box-shadow:0 3px 10px #0008}
+button:active{background:#39749b}
+#message{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:#101923dd;padding:10px 14px;border-radius:12px;font-size:13px;opacity:0;transition:opacity .2s;text-align:center}
+#loading{position:absolute;inset:0;display:grid;place-items:center;background:#101923;color:white;text-align:center;padding:24px}
+#loading small{opacity:.7}
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="loading"><div><h2>MONDE NINJA</h2><p>Chargement du prototype 3D…</p><small>Une connexion Internet est nécessaire au premier lancement.</small></div></div>
+<div id="hud">
+ <div id="title"><b>MONDE NINJA</b> · Prototype 0.1</div>
+ <div id="bars"><div>Vie</div><div class="bar"><div id="health" class="fill"></div></div><div>Énergie</div><div class="bar"><div id="chakra" class="fill"></div></div></div>
+ <div id="hint">Explore librement<br>Démo de déplacement</div>
+ <div id="message"></div>
+ <div id="joystick"><div id="stick"></div></div>
+ <div id="buttons">
+  <button id="jump">SAUT</button><button id="attack">ATTAQUE</button>
+  <button id="charge">CHARGER<br>ÉNERGIE</button><button id="jutsu">JUTSU</button>
+ </div>
+</div>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+(() => {
+const canvas=document.getElementById("renderCanvas");
+const loading=document.getElementById("loading");
+const msg=document.getElementById("message");
+const healthBar=document.getElementById("health"), chakraBar=document.getElementById("chakra");
+if(!window.BABYLON){loading.innerHTML="<div><h2>Chargement impossible</h2><p>Vérifie ta connexion Internet puis recharge la page.</p></div>";return;}
+const engine=new BABYLON.Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,antialias:true});
+const scene=new BABYLON.Scene(engine);
+scene.clearColor=new BABYLON.Color4(.56,.76,.88,1);
+const camera=new BABYLON.FollowCamera("camera",new BABYLON.Vector3(0,5,-10),scene);
+camera.radius=10;camera.heightOffset=4;camera.rotationOffset=180;camera.cameraAcceleration=.06;camera.maxCameraSpeed=12;
+camera.lowerRadiusLimit=7;camera.upperRadiusLimit=13;scene.activeCamera=camera;
+const light=new BABYLON.HemisphericLight("sun",new BABYLON.Vector3(0,1,0),scene);light.intensity=.95;
+const sun=new BABYLON.DirectionalLight("sun2",new BABYLON.Vector3(-.5,-1,.4),scene);sun.position=new BABYLON.Vector3(20,35,-20);sun.intensity=.55;
+const mat=(name,color)=>{let m=new BABYLON.StandardMaterial(name,scene);m.diffuseColor=BABYLON.Color3.FromHexString(color);return m;};
+const grass=mat("grass","#668c55"), wood=mat("wood","#76513b"), roof=mat("roof","#843e37"), stone=mat("stone","#777c83"), leaf=mat("leaf","#356b42"), skin=mat("skin","#d9a47d"), dark=mat("dark","#202b38"), cloth=mat("cloth","#263e59"), trim=mat("trim","#d6dce2"), blue=mat("chakra","#38b8ff");
+const ground=BABYLON.MeshBuilder.CreateGround("ground",{width:110,height:110},scene);ground.material=grass;
+const makeBox=(name,x,y,z,w,h,d,material)=>{let o=BABYLON.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);o.position.set(x,y,z);o.material=material;return o;};
+function tree(x,z,s=1){let trunk=BABYLON.MeshBuilder.CreateCylinder("trunk",{height:2.1*s,diameter:.42*s},scene);trunk.position.set(x,1.05*s,z);trunk.material=wood;let crown=BABYLON.MeshBuilder.CreateSphere("crown",{diameter:2.6*s,segments:8},scene);crown.position.set(x,2.55*s,z);crown.scaling.y=1.1;crown.material=leaf;}
+function house(x,z,s=1){makeBox("house",x,1.3*s,z,5*s,2.6*s,4*s,wood);let r=BABYLON.MeshBuilder.CreateCylinder("roof",{diameter:6.5*s,height:1.1*s,tessellation:4},scene);r.position.set(x,3.1*s,z);r.rotation.y=Math.PI/4;r.scaling.z=.8;r.material=roof;makeBox("door",x,0.8*s,z-2.02*s,.9*s,1.6*s,.08, dark);}
+house(-10,8,1.15);house(0,12,.9);house(10,8,1.05);house(-12,-1,.8);house(12,-2,.8);
+for(let i=0;i<22;i++){let a=i*.72,r=23+(i%4)*3;tree(Math.cos(a)*r,Math.sin(a)*r,.8+(i%3)*.15);}
+for(let i=0;i<7;i++)tree(-18+i*6,20+(i%2)*2,.9);
+ // Cave entrance: dark arch built from stone blocks, purely decorative.
+makeBox("cave rock",0,2.2,31,9,4.4,2,stone);
+makeBox("cave opening",0,1.35,29.9,4.2,2.7,.2,dark);
+let arch=BABYLON.MeshBuilder.CreateCylinder("arch",{height:2.2,diameter:5,tessellation:16},scene);arch.rotation.z=Math.PI/2;arch.scaling.y=.5;arch.position.set(0,2.8,29.8);arch.material=stone;
+ // Decorative path
+for(let i=0;i<12;i++){let p=makeBox("path stone",0,.025,2+i*2,4,.05,1.2,stone);p.material=stone;}
+ // Player: original placeholder ninja, no borrowed character design.
+const player=new BABYLON.TransformNode("player",scene);
+let body=BABYLON.MeshBuilder.CreateCapsule("ninja body",{height:1.8,radius:.42},scene);body.parent=player;body.position.y=1.05;body.material=cloth;
+let head=BABYLON.MeshBuilder.CreateSphere("ninja head",{diameter:.72,segments:12},scene);head.parent=player;head.position.y=2.05;head.material=skin;
+let mask=makeBox("face wrap",0,0,0,.68,.22,.42,dark);mask.parent=player;mask.position.set(0,1.98,.3);
+let band=makeBox("headband",0,0,0,.78,.12,.78,trim);band.parent=player;band.position.y=2.32;
+let arm1=BABYLON.MeshBuilder.CreateCapsule("arm1",{height:1,radius:.16},scene);arm1.parent=player;arm1.position.set(-.52,1.25,0);arm1.rotation.z=-.25;arm1.material=cloth;
+let arm2=BABYLON.MeshBuilder.CreateCapsule("arm2",{height:1,radius:.16},scene);arm2.parent=player;arm2.position.set(.52,1.25,0);arm2.rotation.z=.25;arm2.material=cloth;
+let leg1=BABYLON.MeshBuilder.CreateCapsule("leg1",{height:.9,radius:.19},scene);leg1.parent=player;leg1.position.set(-.23,.42,0);leg1.material=dark;
+let leg2=BABYLON.MeshBuilder.CreateCapsule("leg2",{height:.9,radius:.19},scene);leg2.parent=player;leg2.position.set(.23,.42,0);leg2.material=dark;
+player.position.set(0,0,-5);camera.lockedTarget=player;
+ // Villagers: silent decorative residents, no interaction.
+function villager(x,z,shirt){let root=new BABYLON.TransformNode("villager",scene);root.position.set(x,0,z);let torso=BABYLON.MeshBuilder.CreateCapsule("villager body",{height:1.55,radius:.36},scene);torso.parent=root;torso.position.y=.95;torso.material=shirt;let h=BABYLON.MeshBuilder.CreateSphere("villager head",{diameter:.62,segments:10},scene);h.parent=root;h.position.y=1.92;h.material=skin;let hair=BABYLON.MeshBuilder.CreateSphere("hair",{diameter:.66,segments:8},scene);hair.parent=root;hair.position.y=2.13;hair.scaling.y=.55;hair.material=dark;}
+villager(-7,5,mat("villager1","#a65b4a"));villager(5,7,mat("villager2","#c2a05b"));villager(8,-1,mat("villager3","#526e8a"));villager(-13,1,mat("villager4","#7a628b"));
+let energy=100,health=100,charging=false,moveX=0,moveY=0,jumpV=0,onGround=true,attackCooldown=0,jutsuCooldown=0;
+function say(t){msg.textContent=t;msg.style.opacity=1;clearTimeout(say.t);say.t=setTimeout(()=>msg.style.opacity=0,1500);}
+function updateBars(){healthBar.style.width=health+"%";chakraBar.style.width=energy+"%";}
+const stickArea=document.getElementById("joystick"),stick=document.getElementById("stick");let joyId=null,joyRect;
+function setJoy(e){joyRect=stickArea.getBoundingClientRect();let cx=joyRect.left+joyRect.width/2,cy=joyRect.top+joyRect.height/2;let dx=e.clientX-cx,dy=e.clientY-cy,dist=Math.hypot(dx,dy),max=36;if(dist>max){dx=dx/dist*max;dy=dy/dist*max;}stick.style.transform=`translate(${dx}px,${dy}px)`;moveX=dx/max;moveY=dy/max;}
+stickArea.addEventListener("pointerdown",e=>{joyId=e.pointerId;stickArea.setPointerCapture(joyId);setJoy(e);});
+stickArea.addEventListener("pointermove",e=>{if(e.pointerId===joyId)setJoy(e);});
+function resetJoy(){joyId=null;moveX=0;moveY=0;stick.style.transform="translate(0,0)";}
+stickArea.addEventListener("pointerup",resetJoy);stickArea.addEventListener("pointercancel",resetJoy);
+document.getElementById("charge").addEventListener("pointerdown",e=>{e.preventDefault();charging=true;});
+["pointerup","pointercancel","pointerleave"].forEach(ev=>document.getElementById("charge").addEventListener(ev,()=>charging=false));
+document.getElementById("jump").addEventListener("pointerdown",e=>{e.preventDefault();if(onGround){jumpV=7.5;onGround=false;}});
+document.getElementById("attack").addEventListener("pointerdown",e=>{e.preventDefault();if(attackCooldown<=0){attackCooldown=.55;player.rotation.y+=.22;let old=body.scaling.z;body.scaling.z=1.3;setTimeout(()=>body.scaling.z=1,130);say("Mouvement d'entraînement !");}});
+document.getElementById("jutsu").addEventListener("pointerdown",e=>{e.preventDefault();if(energy>=25&&jutsuCooldown<=0){energy-=25;jutsuCooldown=1.0;updateBars();let orb=BABYLON.MeshBuilder.CreateSphere("energy effect",{diameter:.65,segments:12},scene);orb.material=blue;orb.position=player.position.add(new BABYLON.Vector3(Math.sin(player.rotation.y)*1.2,1.4,Math.cos(player.rotation.y)*1.2));let glow=new BABYLON.PointLight("glow",orb.position,scene);glow.diffuse=new BABYLON.Color3(.2,.6,1);glow.intensity=2;setTimeout(()=>{orb.dispose();glow.dispose();},650);say("Jutsu d'énergie !");}else if(energy<25)say("Pas assez d'énergie.");});
+const keys={};window.addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;if(e.key===" ")document.getElementById("jump").dispatchEvent(new PointerEvent("pointerdown"));});
+window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+scene.onBeforeRenderObservable.add(()=>{
+let dt=Math.min(engine.getDeltaTime()/1000,.04);
+if(charging){energy=Math.min(100,energy+24*dt);}else{energy=Math.min(100,energy+2.2*dt);}
+attackCooldown=Math.max(0,attackCooldown-dt);jutsuCooldown=Math.max(0,jutsuCooldown-dt);
+let ix=moveX+(keys.d?1:0)-(keys.a?1:0),iy=moveY+(keys.s?1:0)-(keys.w?1:0);
+let mag=Math.hypot(ix,iy);if(mag>1){ix/=mag;iy/=mag;}
+let forward=new BABYLON.Vector3(Math.sin(camera.rotation.y),0,Math.cos(camera.rotation.y));
+let right=new BABYLON.Vector3(forward.z,0,-forward.x);
+let dir=right.scale(ix).add(forward.scale(-iy));
+if(dir.length()>.05){dir.normalize();player.position.addInPlace(dir.scale(5.3*dt));player.rotation.y=Math.atan2(dir.x,dir.z);}
+jumpV-=18*dt;player.position.y+=jumpV*dt;if(player.position.y<=0){player.position.y=0;jumpV=0;onGround=true;}
+player.position.x=BABYLON.Scalar.Clamp(player.position.x,-48,48);player.position.z=BABYLON.Scalar.Clamp(player.position.z,-48,48);
+updateBars();
+});
+engine.runRenderLoop(()=>scene.render());
+window.addEventListener("resize",()=>engine.resize());
+setTimeout(()=>loading.style.display="none",700);
+})();
+</script>
+</body>
+</html>
